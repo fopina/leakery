@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"flag"
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/options"
 	"github.com/schollz/progressbar"
     "bufio"
     "strings"
@@ -38,6 +39,7 @@ func main() {
 	importPtr := flag.String("import", "", "path to import directory")
 	searchPtr := flag.String("search", "", "email to search for")
 	debugPtr := flag.Bool("debug", false, "debug verbosity")
+	fileIOPtr := flag.Bool("fileio", false, "use fileIO (instead of memorymap) for badger - for low RAM devices")
 
 	flag.Parse()
 
@@ -48,6 +50,9 @@ func main() {
 	opts := badger.DefaultOptions
   	opts.Dir = "badger"
   	opts.ValueDir = "badger"
+  	if *fileIOPtr {
+  		opts.ValueLogLoadingMode = options.FileIO
+  	}
   	db, err := badger.Open(opts)
 	logger.FatalErr(err)
 	defer db.Close()
