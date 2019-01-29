@@ -5,11 +5,12 @@ import (
 	"os"
 	"fmt"
 	"flag"
-	"github.com/xyproto/simplebolt"
+	bolt "github.com/coreos/bbolt"
 	"github.com/schollz/progressbar"
     "bufio"
     "strings"
     "time"
+    "errors"
 )
 
 const MaxInt = int(^uint(0)  >> 1) 
@@ -44,12 +45,9 @@ func main() {
 		logger.debug = true
 	}
 
-	db, err := simplebolt.New("bolt.db")
+	db, err := bolt.Open("bolt.db", 0600, &bolt.Options{Timeout: 1 * time.Second})
 	logger.FatalErr(err)
 	defer db.Close()
-
-	kv, err := simplebolt.NewKeyValue(db, "bigDB")
-	logger.FatalErr(err)
 
 	if (*importPtr != "") {
 		stat, err := os.Stat(*importPtr)
@@ -72,21 +70,52 @@ func main() {
 
 		scanner := bufio.NewScanner(fd)
 
-		var line = ""
-	    for scanner.Scan() {
-	        line = scanner.Text()
-	        bar.Add(len(line))
-	        data := strings.Split(line, ":")
-	        err = kv.Set(data[0], data[1])
-	        logger.FatalErr(err)
-	    }
+		name := []byte("bigDB")
+		err = db.Update(func(tx *bolt.Tx) error {
+			if _, err := tx.CreateBucketIfNotExists(name); err != nil {
+				return errors.New("Could not create bucket: " + err.Error())
+			}
+			return nil
+		})
+		logger.FatalErr(err)
+
+		db.Update(func(tx *bolt.Tx) error {
+			bucket := tx.Bucket(name)
+			var line = ""
+		    for scanner.Scan() {
+		        line = scanner.Text()
+		        bar.Add(len(line))
+		        data := strings.Split(line, ":")
+			
+				err = bucket.Put([]byte(data[0]), []byte(data[1]))
+				logger.FatalErr(err)
+			}
+			return nil
+	    })
 
 	} else if (*searchPtr != "") {
-		r, err := kv.Get(*searchPtr)
-		if err != nil {
-			logger.Fatal(err)
-		}
-		logger.Println(r)
+		name := []byte("bigDB")
+		err = db.Update(func(tx *bolt.Tx) error {
+			if _, err := tx.CreateBucketIfNotExists(name); err != nil {
+				return errors.New("Could not create bucket: " + err.Error())
+			}
+			return nil
+		})
+		var val string
+		err = db.View(func(tx *bolt.Tx) error {
+			bucket := tx.Bucket([]byte("bigDB"))
+			if bucket == nil {
+				return errors.New("bucket not found")
+			}
+			byteval := bucket.Get([]byte(*searchPtr))
+			if byteval == nil {
+				return errors.New("key not found")
+			}
+			val = string(byteval)
+			return nil // Return from View function
+		})
+		logger.FatalErr(err)
+		logger.Println(val)
 	} else {
 		flag.Usage()
 		logger.Fatal("choose an option")
