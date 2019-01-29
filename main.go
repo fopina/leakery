@@ -7,14 +7,12 @@ import (
 	"fmt"
 	"flag"
 	bolt "github.com/coreos/bbolt"
-	"github.com/schollz/progressbar"
+	"github.com/fopina/progressbar"
     "bufio"
     "strings"
     "time"
     "errors"
 )
-
-const MaxInt = int(^uint(0)  >> 1) 
 
 type MyLogger struct {
     *log.Logger
@@ -60,14 +58,13 @@ func main() {
 		stat, err := os.Stat(*importPtr)
 		logger.FatalErr(err)
 
-		totalSize := int(stat.Size())
-		logger.Debugln("file size", totalSize)
+		logger.Debugln("file size", stat.Size())
 		
 		bar := progressbar.NewOptions(
-			totalSize,
+			stat.Size(),
 			progressbar.OptionSetRenderBlankState(true),
 			progressbar.OptionThrottle(1 * time.Second),
-			progressbar.OptionSetBytes(totalSize),
+			progressbar.OptionSetBytes(stat.Size()),
 		)
 
 		
@@ -89,7 +86,7 @@ func main() {
 	    for scanner.Scan() {
 	        line = scanner.Text()
 	        linesRead += 1
-	        bar.Add(len(line))
+	        bar.Add(len(line) + 1)  // 1 or 2 for newline...?
 	        data := strings.Split(line, ":")
 		
 			err = bucket.Put([]byte(data[0]), []byte(data[1]))
