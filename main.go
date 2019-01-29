@@ -6,12 +6,12 @@ import (
 	"runtime"
 	"fmt"
 	"flag"
-	bolt "github.com/coreos/bbolt"
+	"github.com/globalsign/mgo"
 	"github.com/fopina/progressbar"
     "bufio"
     "strings"
     "time"
-    "errors"
+    //"errors"
 )
 
 type MyLogger struct {
@@ -36,6 +36,11 @@ func (l *MyLogger) FatalErr(err error) {
 	}
 }
 
+type LoginData struct {
+	Username	string
+	Password	string
+}
+
 func main() {
 	logger  := MyLogger{log.New(os.Stderr, "", 0), false}
 
@@ -50,9 +55,9 @@ func main() {
 		logger.SetFlags(log.LstdFlags | log.Lshortfile)
 	}
 
-	db, err := bolt.Open("bolt.db", 0600, &bolt.Options{Timeout: 1 * time.Second})
+	session, err := mgo.Dial("localhost:28000")
 	logger.FatalErr(err)
-	defer db.Close()
+	defer session.Close()
 
 	if (*importPtr != "") {
 		stat, err := os.Stat(*importPtr)
@@ -74,34 +79,36 @@ func main() {
 
 		scanner := bufio.NewScanner(fd)
 
-		name := []byte("bigDB")
+		c := session.DB("leaks").C("emails")
 
-		tx, err := db.Begin(true)
+		index := Index{
+		    Key: []string{"username"},
+		    Unique: true,
+		    DropDups: true,
+		    Background: true, // See notes.
+		    Sparse: true,
+		}
+		err = c.EnsureIndex(index)
 		logger.FatalErr(err)
-		bucket, err := tx.CreateBucketIfNotExists(name)
-		logger.FatalErr(err)
-		
+
 		line := ""
 		linesRead := 0
+		bulk := c.Bulk()
+
 	    for scanner.Scan() {
 	        line = scanner.Text()
-	        linesRead += 1
 	        bar.Add(len(line) + 1)  // 1 or 2 for newline...?
 	        data := strings.Split(line, ":")
-		
-			err = bucket.Put([]byte(data[0]), []byte(data[1]))
-			logger.FatalErr(err)
-			// commit on every N lines
-			if linesRead % 10000 == 0 {
-				err = tx.Commit()
-				logger.FatalErr(err)
-				tx, err = db.Begin(true)
-				logger.FatalErr(err)
-				bucket = tx.Bucket(name)
-			}
+	        bulk.Insert(LoginData{Username: data[0], Password: data[1]})
+			linesRead += 1
+
+	        if linesRead % 10000 == 0 {
+	        	bulk.Run()
+	        }
 		}
 
 	} else if (*searchPtr != "") {
+		/*
 		name := []byte("bigDB")
 		err = db.Update(func(tx *bolt.Tx) error {
 			if _, err := tx.CreateBucketIfNotExists(name); err != nil {
@@ -124,6 +131,7 @@ func main() {
 		})
 		logger.FatalErr(err)
 		logger.Println(val)
+		*/
 	} else {
 		flag.Usage()
 		logger.Fatal("choose an option")
