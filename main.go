@@ -5,12 +5,12 @@ import (
 	"os"
 	"fmt"
 	"flag"
-	bolt "github.com/coreos/bbolt"
+	"github.com/dgraph-io/badger"
 	"github.com/schollz/progressbar"
     "bufio"
     "strings"
     "time"
-    "errors"
+    //"errors"
 )
 
 const MaxInt = int(^uint(0)  >> 1) 
@@ -45,7 +45,10 @@ func main() {
 		logger.debug = true
 	}
 
-	db, err := bolt.Open("bolt.db", 0600, &bolt.Options{Timeout: 1 * time.Second})
+	opts := badger.DefaultOptions
+  	opts.Dir = "badger"
+  	opts.ValueDir = "badger"
+  	db, err := badger.Open(opts)
 	logger.FatalErr(err)
 	defer db.Close()
 
@@ -69,31 +72,25 @@ func main() {
 	    defer fd.Close()
 
 		scanner := bufio.NewScanner(fd)
+		txn := db.NewTransaction(true)
 
-		name := []byte("bigDB")
-		err = db.Update(func(tx *bolt.Tx) error {
-			if _, err := tx.CreateBucketIfNotExists(name); err != nil {
-				return errors.New("Could not create bucket: " + err.Error())
-			}
-			return nil
-		})
-		logger.FatalErr(err)
-
-		db.Update(func(tx *bolt.Tx) error {
-			bucket := tx.Bucket(name)
-			var line = ""
-		    for scanner.Scan() {
-		        line = scanner.Text()
-		        bar.Add(len(line))
-		        data := strings.Split(line, ":")
-			
-				err = bucket.Put([]byte(data[0]), []byte(data[1]))
+		var line = ""
+	    for scanner.Scan() {
+	        line = scanner.Text()
+	        bar.Add(len(line))
+	        data := strings.Split(line, ":")
+	        err = txn.Set([]byte(data[0]), []byte(data[1]))
+	        if err == badger.ErrTxnTooBig {
+				err = txn.Commit()
 				logger.FatalErr(err)
+				txn = db.NewTransaction(true)
+				err = txn.Set([]byte(data[0]), []byte(data[1]))
 			}
-			return nil
-	    })
+			logger.FatalErr(err)
+		}
 
 	} else if (*searchPtr != "") {
+		/*
 		name := []byte("bigDB")
 		err = db.Update(func(tx *bolt.Tx) error {
 			if _, err := tx.CreateBucketIfNotExists(name); err != nil {
@@ -116,6 +113,7 @@ func main() {
 		})
 		logger.FatalErr(err)
 		logger.Println(val)
+		*/
 	} else {
 		flag.Usage()
 		logger.Fatal("choose an option")
