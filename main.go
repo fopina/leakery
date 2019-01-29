@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"runtime"
 	"fmt"
 	"flag"
 	bolt "github.com/coreos/bbolt"
@@ -28,7 +29,12 @@ func (l *MyLogger) Debugln(v ...interface{}) {
 
 func (l *MyLogger) FatalErr(err error) {
 	if err != nil {
-		l.Fatal(err) 
+		if l.debug {
+			_, fn, line, _ := runtime.Caller(1)
+			l.Fatalf("func: %s, line: %d, %v", fn, line, err) 
+		} else {
+			l.Fatal(err) 
+		}
 	}
 }
 
@@ -43,6 +49,7 @@ func main() {
 
 	if *debugPtr {
 		logger.debug = true
+		logger.SetFlags(log.LstdFlags | log.Lshortfile)
 	}
 
 	db, err := bolt.Open("bolt.db", 0600, &bolt.Options{Timeout: 1 * time.Second})
@@ -71,27 +78,31 @@ func main() {
 		scanner := bufio.NewScanner(fd)
 
 		name := []byte("bigDB")
-		err = db.Update(func(tx *bolt.Tx) error {
-			if _, err := tx.CreateBucketIfNotExists(name); err != nil {
-				return errors.New("Could not create bucket: " + err.Error())
-			}
-			return nil
-		})
-		logger.FatalErr(err)
 
-		db.Update(func(tx *bolt.Tx) error {
-			bucket := tx.Bucket(name)
-			var line = ""
-		    for scanner.Scan() {
-		        line = scanner.Text()
-		        bar.Add(len(line))
-		        data := strings.Split(line, ":")
-			
-				err = bucket.Put([]byte(data[0]), []byte(data[1]))
+		tx, err := db.Begin(true)
+		logger.FatalErr(err)
+		bucket, err := tx.CreateBucketIfNotExists(name)
+		logger.FatalErr(err)
+		
+		line := ""
+		linesRead := 0
+	    for scanner.Scan() {
+	        line = scanner.Text()
+	        linesRead += 1
+	        bar.Add(len(line))
+	        data := strings.Split(line, ":")
+		
+			err = bucket.Put([]byte(data[0]), []byte(data[1]))
+			logger.FatalErr(err)
+			// commit on every N lines
+			if linesRead % 10000 == 0 {
+				err = tx.Commit()
 				logger.FatalErr(err)
+				tx, err = db.Begin(true)
+				logger.FatalErr(err)
+				bucket = tx.Bucket(name)
 			}
-			return nil
-	    })
+		}
 
 	} else if (*searchPtr != "") {
 		name := []byte("bigDB")
