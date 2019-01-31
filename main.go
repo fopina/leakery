@@ -7,7 +7,8 @@ import (
 	"fmt"
 	"flag"
 	"github.com/globalsign/mgo"
-	"github.com/fopina/progressbar"
+	"github.com/globalsign/mgo/bson"
+	"github.com/schollz/progressbar/v2"
     "bufio"
     "strings"
     "time"
@@ -65,11 +66,11 @@ func main() {
 
 		logger.Debugln("file size", stat.Size())
 		
-		bar := progressbar.NewOptions(
+		bar := progressbar.NewOptions64(
 			stat.Size(),
 			progressbar.OptionSetRenderBlankState(true),
 			progressbar.OptionThrottle(1 * time.Second),
-			progressbar.OptionSetBytes(stat.Size()),
+			progressbar.OptionSetBytes64(stat.Size()),
 		)
 
 		
@@ -81,10 +82,10 @@ func main() {
 
 		c := session.DB("leaks").C("emails")
 
-		index := Index{
+		index := mgo.Index{
 		    Key: []string{"username"},
 		    Unique: true,
-		    DropDups: true,
+		    DropDups: false,
 		    Background: true, // See notes.
 		    Sparse: true,
 		}
@@ -99,11 +100,14 @@ func main() {
 	        line = scanner.Text()
 	        bar.Add(len(line) + 1)  // 1 or 2 for newline...?
 	        data := strings.Split(line, ":")
-	        bulk.Insert(LoginData{Username: data[0], Password: data[1]})
+	        bulk.Upsert(bson.M{"username": data[0]}, bson.M{"$push": bson.M{"passwords": data[1]}})
+	        //bulk.Insert(bson.M{"username1": data[0], "passwords": data[1]})
 			linesRead += 1
 
-	        if linesRead % 10000 == 0 {
-	        	bulk.Run()
+	        if linesRead % 5000 == 0 {
+	        	_, err = bulk.Run()
+	        	logger.FatalErr(err)
+	        	bulk = c.Bulk()
 	        }
 		}
 
