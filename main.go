@@ -6,13 +6,13 @@ import (
 	"runtime"
 	"fmt"
 	"flag"
-	"github.com/globalsign/mgo"
-	"github.com/globalsign/mgo/bson"
 	"github.com/schollz/progressbar/v2"
     "bufio"
     "strings"
     "time"
     //"errors"
+     "database/sql"
+    _ "github.com/go-sql-driver/mysql"
 )
 
 type MyLogger struct {
@@ -56,9 +56,15 @@ func main() {
 		logger.SetFlags(log.LstdFlags | log.Lshortfile)
 	}
 
-	session, err := mgo.Dial("localhost:28000")
+	db, err := sql.Open("mysql", "root:password@tcp(127.0.0.1:3306)/test")
 	logger.FatalErr(err)
-	defer session.Close()
+	defer db.Close()
+	_, err = db.Query("CREATE TABLE IF NOT EXISTS leaks (EMAIL VARCHAR(255), PASSWORD VARCHAR(255))")
+	logger.FatalErr(err)
+	_, err = db.Query("CREATE INDEX email_index on leaks (email)")
+	logger.FatalErr(err)
+	_, err = db.Query("DROP INDEX email_index on leaks")
+	logger.FatalErr(err)
 
 	if (*importPtr != "") {
 		stat, err := os.Stat(*importPtr)
@@ -80,34 +86,17 @@ func main() {
 
 		scanner := bufio.NewScanner(fd)
 
-		c := session.DB("leaks").C("emails")
-
-		index := mgo.Index{
-		    Key: []string{"username"},
-		    Unique: false,
-		    DropDups: false,
-		    Background: true, // See notes.
-		    Sparse: true,
-		}
-		err = c.EnsureIndex(index)
-		logger.FatalErr(err)
-
 		line := ""
 		linesRead := 0
-		bulk := c.Bulk()
 
 	    for scanner.Scan() {
 	        line = scanner.Text()
 	        bar.Add(len(line) + 1)  // 1 or 2 for newline...?
 	        data := strings.Split(line, ":")
-	        //bulk.Upsert(bson.M{"username": data[0]}, bson.M{"$push": bson.M{"passwords": data[1]}})
-	        bulk.Insert(bson.M{"username": data[0], "password": data[1]})
+	        _, err = db.Query("INSERT INTO leaks VALUES ( ?, ? )", data[0], data[1])
 			linesRead += 1
 
 	        if linesRead % 10000 == 0 {
-	        	_, err = bulk.Run()
-	        	logger.FatalErr(err)
-	        	bulk = c.Bulk()
 	        }
 		}
 
