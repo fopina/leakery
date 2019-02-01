@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"flag"
 	bolt "github.com/coreos/bbolt"
-	"github.com/fopina/progressbar"
+	"github.com/schollz/progressbar/v2"
     "bufio"
     "strings"
     "time"
@@ -60,11 +60,11 @@ func main() {
 
 		logger.Debugln("file size", stat.Size())
 		
-		bar := progressbar.NewOptions(
+		bar := progressbar.NewOptions64(
 			stat.Size(),
 			progressbar.OptionSetRenderBlankState(true),
 			progressbar.OptionThrottle(1 * time.Second),
-			progressbar.OptionSetBytes(stat.Size()),
+			progressbar.OptionSetBytes64(stat.Size()),
 		)
 
 		
