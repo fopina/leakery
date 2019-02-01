@@ -104,7 +104,7 @@ func main() {
 	        //bulk.Insert(bson.M{"username1": data[0], "passwords": data[1]})
 			linesRead += 1
 
-	        if linesRead % 5000 == 0 {
+	        if linesRead % 10000 == 0 {
 	        	_, err = bulk.Run()
 	        	logger.FatalErr(err)
 	        	bulk = c.Bulk()
