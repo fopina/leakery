@@ -84,7 +84,7 @@ func main() {
 
 		index := mgo.Index{
 		    Key: []string{"username"},
-		    Unique: true,
+		    Unique: false,
 		    DropDups: false,
 		    Background: true, // See notes.
 		    Sparse: true,
@@ -100,8 +100,8 @@ func main() {
 	        line = scanner.Text()
 	        bar.Add(len(line) + 1)  // 1 or 2 for newline...?
 	        data := strings.Split(line, ":")
-	        bulk.Upsert(bson.M{"username": data[0]}, bson.M{"$push": bson.M{"passwords": data[1]}})
-	        //bulk.Insert(bson.M{"username1": data[0], "passwords": data[1]})
+	        //bulk.Upsert(bson.M{"username": data[0]}, bson.M{"$push": bson.M{"passwords": data[1]}})
+	        bulk.Insert(bson.M{"username": data[0], "password": data[1]})
 			linesRead += 1
 
 	        if linesRead % 10000 == 0 {
