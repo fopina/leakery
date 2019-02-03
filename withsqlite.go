@@ -11,8 +11,8 @@ import (
     "strings"
     "time"
     //"errors"
-     "database/sql"
-    _ "github.com/go-sql-driver/mysql"
+    "database/sql"
+    _ "github.com/mattn/go-sqlite3"
 )
 
 type MyLogger struct {
@@ -56,14 +56,19 @@ func main() {
 		logger.SetFlags(log.LstdFlags | log.Lshortfile)
 	}
 
-	db, err := sql.Open("mysql", "root:password@tcp(127.0.0.1:3306)/test")
+    db, err := sql.Open("sqlite3", "./sqlite.db")
 	logger.FatalErr(err)
 	defer db.Close()
-	_, err = db.Query("CREATE TABLE IF NOT EXISTS leaks (EMAIL VARCHAR(255), PASSWORD VARCHAR(255))")
+	_, err = db.Query("CREATE TABLE IF NOT EXISTS leaks (EMAIL VARCHAR(255), PASSWORD VARCHAR(255));")
 	logger.FatalErr(err)
-	_, err = db.Query("CREATE INDEX email_index on leaks (email)")
+	_, err = db.Query("PRAGMA journal_mode=OFF;")
 	logger.FatalErr(err)
-	// _, err = db.Query("DROP INDEX email_index on leaks")
+	_, err = db.Query("PRAGMA synchronous=OFF;")
+	logger.FatalErr(err)
+	
+	// _, err = db.Query("CREATE INDEX email_index on leaks (email);")
+	// logger.FatalErr(err)
+	// _, err = db.Query("DROP INDEX email_index on leaks;")
 	// logger.FatalErr(err)
 	tx, err := db.Begin()
 	logger.FatalErr(err)
