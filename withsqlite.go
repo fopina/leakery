@@ -56,22 +56,22 @@ func main() {
 		logger.SetFlags(log.LstdFlags | log.Lshortfile)
 	}
 
-    db, err := sql.Open("sqlite3", "./sqlite.db")
+	// https://stackoverflow.com/questions/1711631/improve-insert-per-second-performance-of-sqlite
+    db, err := sql.Open("sqlite3", "file:sqlite.db?_journal=off&_sync=off")
 	logger.FatalErr(err)
 	defer db.Close()
-	_, err = db.Query("CREATE TABLE IF NOT EXISTS leaks (EMAIL VARCHAR(255), PASSWORD VARCHAR(255));")
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS leaks (EMAIL text, PASSWORD text);")
 	logger.FatalErr(err)
-	_, err = db.Query("PRAGMA journal_mode=OFF;")
+	_, err = db.Exec("CREATE INDEX IF NOT EXISTS email_index on leaks (email);")
 	logger.FatalErr(err)
-	_, err = db.Query("PRAGMA synchronous=OFF;")
-	logger.FatalErr(err)
-	
-	// _, err = db.Query("CREATE INDEX email_index on leaks (email);")
-	// logger.FatalErr(err)
 	// _, err = db.Query("DROP INDEX email_index on leaks;")
 	// logger.FatalErr(err)
+
 	tx, err := db.Begin()
 	logger.FatalErr(err)
+	stmt, err := tx.Prepare("insert into leaks values(?, ?)")
+	logger.FatalErr(err)
+
 
 	if (*importPtr != "") {
 		stat, err := os.Stat(*importPtr)
@@ -100,12 +100,15 @@ func main() {
 	        line = scanner.Text()
 	        bar.Add(len(line) + 1)  // 1 or 2 for newline...?
 	        data := strings.Split(line, ":")
-	        _, err = db.Query("INSERT INTO leaks VALUES ( ?, ? )", data[0], data[1])
+	        _, err = stmt.Exec(data[0], data[1])
+	        logger.FatalErr(err)
 			linesRead += 1
 
 	        if linesRead % 10000 == 0 {
 	        	tx.Commit()
 	        	tx, err = db.Begin()
+				logger.FatalErr(err)
+				stmt, err = tx.Prepare("insert into leaks values(?, ?)")
 				logger.FatalErr(err)
 	        }
 		}
