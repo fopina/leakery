@@ -43,6 +43,7 @@ func main() {
 	importPtr := flag.String("import", "", "path to import directory")
 	searchPtr := flag.String("search", "", "email to search for")
 	debugPtr := flag.Bool("debug", false, "debug verbosity")
+	resumePtr := flag.Bool("resume", false, "resume from last checkpoint")
 
 	flag.Parse()
 
@@ -81,7 +82,22 @@ func main() {
 		logger.FatalErr(err)
 		
 		line := ""
-		linesRead := 0
+		linesRead := uint(0)
+		if (*resumePtr) {
+			sbucket, err := tx.CreateBucketIfNotExists([]byte("==status=="))
+			logger.FatalErr(err)
+			skipLines := uint(binary.BigEndian.Uint64(sbucket.Get([]byte("x"))))
+			logger.Println("Searching checkpoint", skipLines)
+			for scanner.Scan() {
+	        	line = scanner.Text()
+	        	bar.Add(len(line) + 1)  // 1 or 2 for newline...?
+	        	linesRead += 1
+	        	if linesRead == skipLines {
+	        		logger.Println("Resuming")
+	        		break
+	        	}
+	        }
+		}
 	    for scanner.Scan() {
 	        line = scanner.Text()
 	        linesRead += 1
@@ -95,6 +111,10 @@ func main() {
 			logger.FatalErr(err)
 			// commit on every N lines
 			if linesRead % 10000 == 0 {
+				sbucket, err := tx.CreateBucketIfNotExists([]byte("==status=="))
+				logger.FatalErr(err)
+				err = sbucket.Put([]byte("x"), byteID(uint64(linesRead)))
+				logger.FatalErr(err)
 				err = tx.Commit()
 				logger.FatalErr(err)
 				tx, err = db.Begin(true)

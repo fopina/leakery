@@ -1,5 +1,5 @@
 arm:
-	env GOOS=linux GOARCH=arm go build -o leakery-arm
+	env GOOS=linux GOARCH=arm go build -o leakery-arm withbolt2.go
 
 mongo:
 	go run withmongo.go -import $(HOME)/test
