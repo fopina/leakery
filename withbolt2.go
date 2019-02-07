@@ -62,14 +62,6 @@ func main() {
 
 		logger.Debugln("file size", stat.Size())
 		
-		bar := progressbar.NewOptions64(
-			stat.Size(),
-			progressbar.OptionSetRenderBlankState(true),
-			progressbar.OptionThrottle(1 * time.Second),
-			progressbar.OptionSetBytes64(stat.Size()),
-		)
-
-		
 		fd, err := os.Open(*importPtr)
 	    logger.FatalErr(err)
 	    defer fd.Close()
@@ -83,37 +75,52 @@ func main() {
 		
 		line := ""
 		linesRead := uint(0)
+		lastRead := 0
+		// this wouldn't be required if currentNum was exposed by ProgressBar
+		// could also use reflect to access it but sounds dirtier...
+		currentNum := int64(0)
+		bytesRead := func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+			// dirty hack to get the exact bytes read
+			a, b, c := bufio.ScanLines(data, atEOF)
+			lastRead = a
+			return a, b, c
+		}
+		scanner.Split(bytesRead)
 		if (*resumePtr) {
 			sbucket, err := tx.CreateBucketIfNotExists([]byte("==status=="))
 			logger.FatalErr(err)
-			skipLines := uint(binary.BigEndian.Uint64(sbucket.Get([]byte("x"))))
-			logger.Println("Searching checkpoint", skipLines)
-			for scanner.Scan() {
-	        	line = scanner.Text()
-	        	bar.Add(len(line) + 1)  // 1 or 2 for newline...?
-	        	linesRead += 1
-	        	if linesRead == skipLines {
-	        		logger.Println("Resuming")
-	        		break
-	        	}
-	        }
+			r := sbucket.Get([]byte("x"))
+			if len(r) > 0 {
+				currentNum, _ = binary.Varint(r)
+				logger.Println("Searching checkpoint", currentNum)
+				fd.Seek(currentNum, 0)
+			}
 		}
+
+		bar := progressbar.NewOptions64(
+			stat.Size() - currentNum,
+			progressbar.OptionSetRenderBlankState(true),
+			progressbar.OptionThrottle(1 * time.Second),
+			progressbar.OptionSetBytes64(stat.Size() - currentNum),
+		)
+
 	    for scanner.Scan() {
 	        line = scanner.Text()
 	        linesRead += 1
-	        bar.Add(len(line) + 1)  // 1 or 2 for newline...?
+	        currentNum += int64(lastRead)
+	        bar.Add(lastRead)
 	        data := strings.Split(line, ":")
 	        bucket, err := tx.CreateBucketIfNotExists([]byte(data[0]))
 			logger.FatalErr(err)
 			n, err := bucket.NextSequence()
 			logger.FatalErr(err)
-			err = bucket.Put(byteID(n), []byte(data[1]))
+			err = bucket.Put(byteID(int64(n)), []byte(data[1]))
 			logger.FatalErr(err)
 			// commit on every N lines
 			if linesRead % 10000 == 0 {
 				sbucket, err := tx.CreateBucketIfNotExists([]byte("==status=="))
 				logger.FatalErr(err)
-				err = sbucket.Put([]byte("x"), byteID(uint64(linesRead)))
+				err = sbucket.Put([]byte("x"), byteID(currentNum))
 				logger.FatalErr(err)
 				err = tx.Commit()
 				logger.FatalErr(err)
@@ -153,8 +160,8 @@ func main() {
 }
 
 // Create a byte slice from an uint64
-func byteID(x uint64) []byte {
+func byteID(x int64) []byte {
 	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, x)
+	binary.PutVarint(b, x)
 	return b
 }
