@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 
 class Leakery:
-    default = 'plain_combo'
+    default = 'all'
 
     def __init__(self, mode, output):
         m = getattr(self, 'mode_' + mode, None)
@@ -24,13 +24,40 @@ class Leakery:
         if s:
             s()
 
-    def setup_plain_combo(self):
-        self._re = re.compile(rb'^(.*?)[:;](.*)$')
+    def setup_plain(self):
+        self._re = re.compile(rb'^(.*?)[:;\s](.*)$')
 
-    def mode_plain_combo(self, line):
+    def mode_plain(self, line):
         m = self._re.findall(line.strip())
         if m:
             return m[0]
+        return None
+    
+    def setup_user_and_ip(self):
+        self._re = re.compile(rb'^[^:]*:([^:]*):\d+\.\d+\.\d+\.\d+:(.*)$')
+
+    def mode_user_and_ip(self, line):
+        return self.mode_plain(line)
+    
+    def setup_user_included(self):
+        self._re = re.compile(rb'^[^:]*:([^:]*):(.*)$')
+
+    def mode_user_included(self, line):
+        return self.mode_plain(line)
+
+    def setup_all(self):
+        res = []
+        for mode in ('plain', 'user_and_ip', 'user_included'):
+            met = getattr(self, 'setup_' + mode)
+            met()
+            res.append(self._re)
+        self._re = res
+    
+    def mode_all(self, line):
+        for _re in self._re:
+            m = _re.findall(line.strip())
+            if m and b'@' in m[0][0]:
+                return m[0]
         return None
 
     def handle(self, line):
@@ -73,10 +100,14 @@ def _my_os_path_join(*args):
     return '/'.join(args)
 
 
-def walkem(dir):
-    for p, _, files in os.walk(dir):
-        for f in files:
-            yield os.path.join(p, f)
+def walkem(dirs):
+    for d in dirs:
+        if os.path.isdir(d):
+            for p, _, files in os.walk(d):
+                for f in files:
+                    yield os.path.join(p, f)
+        else:
+            yield d
 
 
 class FDCache:
@@ -105,7 +136,7 @@ class FDCache:
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Index random dumps.')
-    parser.add_argument('input', help='input directory')
+    parser.add_argument('input', action='append', help='input directories or files: if directory, subdirectories are processed as well')
     parser.add_argument('-d', '--output',
                         help='output directory')
     parser.add_argument('-p', '--parser', choices=Leakery.modes(),
