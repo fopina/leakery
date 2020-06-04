@@ -66,8 +66,8 @@ class Leakery:
         c = self._m(line)
         if c is None or b'@' not in c[0]:
             return (False, r, line)
-        l = c[0].split(b'@')
-        m = self._mail_re.match(l[0])
+        carr = c[0].split(b'@')
+        m = self._mail_re.match(carr[0])
         kk = []
         jc = b':'.join(c)
         if m:
@@ -80,7 +80,7 @@ class Leakery:
             # jc = jc[lu:]
         else:
             _u = '_'
-        return (True, r, _my_os_path_join(self._output, *kk), _u + '.txt', jc, l[0])
+        return (True, r, _my_os_path_join(self._output, *kk), _u + '.txt', jc, carr[0])
 
     @classmethod
     def modes(cls):
