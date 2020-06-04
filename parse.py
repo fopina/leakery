@@ -32,13 +32,13 @@ class Leakery:
         if m:
             return m[0]
         return None
-    
+
     def setup_user_and_ip(self):
         self._re = re.compile(rb'^[^:]*:([^:]*):\d+\.\d+\.\d+\.\d+:(.*)$')
 
     def mode_user_and_ip(self, line):
         return self.mode_plain(line)
-    
+
     def setup_user_included(self):
         self._re = re.compile(rb'^[^:]*:([^:]*):(.*)$')
 
@@ -52,7 +52,7 @@ class Leakery:
             met()
             res.append(self._re)
         self._re = res
-    
+
     def mode_all(self, line):
         for _re in self._re:
             m = _re.findall(line.strip())
@@ -65,9 +65,7 @@ class Leakery:
         line = line.rstrip()
         c = self._m(line)
         if c is None or b'@' not in c[0]:
-            return (
-                False, r, line
-            )
+            return (False, r, line)
         l = c[0].split(b'@')
         m = self._mail_re.match(l[0])
         kk = []
@@ -82,18 +80,11 @@ class Leakery:
             # jc = jc[lu:]
         else:
             _u = '_'
-        return (
-            True, r, _my_os_path_join(self._output, *kk), _u + '.txt', 
-            jc, l[0]
-        )
+        return (True, r, _my_os_path_join(self._output, *kk), _u + '.txt', jc, l[0])
 
     @classmethod
     def modes(cls):
-        return [
-            m[5:]
-            for m in dir(cls)
-            if m[:5] == 'mode_'
-        ]
+        return [m[5:] for m in dir(cls) if m[:5] == 'mode_']
 
 
 def _my_os_path_join(*args):
@@ -114,11 +105,11 @@ class FDCache:
     def __init__(self, limit=30000):
         self._cache = {}
         self._limit = limit
-    
+
     def open(self, kd1, kd2):
         fname = _my_os_path_join(kd1, kd2)
         if fname not in self._cache:
-            try: 
+            try:
                 _f = open(fname, 'ab')
             except FileNotFoundError:
                 os.makedirs(kd1)
@@ -136,20 +127,33 @@ class FDCache:
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Index random dumps.')
-    parser.add_argument('input', action='append', help='input directories or files: if directory, subdirectories are processed as well')
-    parser.add_argument('-d', '--output',
-                        help='output directory')
-    parser.add_argument('-p', '--parser', choices=Leakery.modes(),
-                        default=Leakery.default,
-                        help='email/password parser to use')
-    parser.add_argument('-l', '--fd-cache', default=30000, type=int,
-                        help='file descriptor cache (to reduce open/close calls) - set ulimit maxfiles accordingly')
-    parser.add_argument('-n', '--workers', type=int,
-                        help='number of workers (default single-process)')
+    parser.add_argument(
+        'input',
+        action='append',
+        help='input directories or files: if directory, subdirectories are processed as well',
+    )
+    parser.add_argument('-d', '--output', help='output directory')
+    parser.add_argument(
+        '-p',
+        '--parser',
+        choices=Leakery.modes(),
+        default=Leakery.default,
+        help='email/password parser to use',
+    )
+    parser.add_argument(
+        '-l',
+        '--fd-cache',
+        default=30000,
+        type=int,
+        help='file descriptor cache (to reduce open/close calls) - set ulimit maxfiles accordingly',
+    )
+    parser.add_argument(
+        '-n', '--workers', type=int, help='number of workers (default single-process)'
+    )
 
     args = parser.parse_args(argv)
 
-    # strip / for the "dumber" _my_os_path_join
+    # strip / for the 'dumber' _my_os_path_join
     args.output = args.output.rstrip('/')
     prs = Leakery(args.parser, args.output)
     fd_cache = FDCache(limit=args.fd_cache)
@@ -160,10 +164,13 @@ def main(argv=None):
         session_data = open(session, 'r').read().splitlines()
         split_data = session_data.index('=')
         old_args = session_data[:split_data]
-        files_done = set(session_data[split_data+1:])
+        files_done = set(session_data[split_data + 1 :])
         if old_args == sys.argv[1:]:
-            msg = 'Session save was found and matches parameters. %d files already done. Resume?' % len(files_done)
-            shall = input("%s (y/n) " % msg).lower().strip()
+            msg = (
+                'Session save was found and matches parameters. %d files already done. Resume?'
+                % len(files_done)
+            )
+            shall = input('%s (y/n) ' % msg).lower().strip()
             if shall != 'y':
                 print('Remove file %s and re-run' % session)
                 exit(1)
@@ -222,16 +229,20 @@ def main(argv=None):
                     else:
                         error_fd.write(d[2])
                         error_fd.write(b'\n')
-                    pbar.set_postfix(hits=pbar.format_sizeof(stats[1]), err=pbar.format_sizeof(stats[0]), fileno=fileno, refresh=False)
+                    pbar.set_postfix(
+                        hits=pbar.format_sizeof(stats[1]),
+                        err=pbar.format_sizeof(stats[0]),
+                        fileno=fileno,
+                        refresh=False,
+                    )
             session_fd.write(f)
             session_fd.write('\n')
             session_fd.flush()  # make sure progress is not lost
-
 
     fd_cache.close_all()
     print('Records found: %d' % stats[1])
     print('Errors: %d' % stats[0])
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

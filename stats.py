@@ -16,6 +16,10 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
 
+    # test permissions before all the work ^^
+    with open(args.statsfile, 'a') as f:
+        pass
+
     totsize = 0
     totfiles = 0
     records = 0
@@ -31,7 +35,9 @@ def main(argv=None):
             fileno += 1
             pbar.update(os.path.getsize(f))
             records += int(subprocess.check_output(['wc', '-l', f]).split()[0])
-            pbar.set_postfix(recs=pbar.format_sizeof(records), fileno=fileno, refresh=False)
+            pbar.set_postfix(
+                recs=pbar.format_sizeof(records), fileno=fileno, refresh=False
+            )
 
     print('Records found: %d' % records)
 
@@ -48,5 +54,5 @@ def main(argv=None):
         f.write('\n\n')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
