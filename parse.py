@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 class Leakery:
     default = 'all'
+    _mail_re = re.compile(rb'^([a-zA-Z]{1,3})')
 
     def __init__(self, mode, output):
         m = getattr(self, 'mode_' + mode, None)
@@ -18,7 +19,6 @@ class Leakery:
         self._m = m
         self._output = output
 
-        self._mail_re = re.compile(rb'^([a-zA-Z]{1,3})')
         self._domain_clean = re.compile(rb'[^a-zA-Z0-9\_\-\.]')
         s = getattr(self, 'setup_' + mode, None)
         if s:
@@ -60,16 +60,11 @@ class Leakery:
                 return m[0]
         return None
 
-    def handle(self, line):
-        r = len(line)
-        line = line.rstrip()
-        c = self._m(line)
-        if c is None or b'@' not in c[0]:
-            return (False, r, line)
-        carr = c[0].split(b'@')
-        m = self._mail_re.match(carr[0])
+    @classmethod
+    def email_path(cls, email):
+        m = cls._mail_re.match(email)
         kk = []
-        jc = b':'.join(c)
+
         if m:
             _u = m.group(1).decode().lower()
             lu = len(_u)
@@ -80,6 +75,17 @@ class Leakery:
             # jc = jc[lu:]
         else:
             _u = '_'
+        return kk, _u
+
+    def handle(self, line):
+        r = len(line)
+        line = line.rstrip()
+        c = self._m(line)
+        if c is None or b'@' not in c[0]:
+            return (False, r, line)
+        carr = c[0].split(b'@')
+        jc = b':'.join(c)
+        kk, _u = self.email_path(carr[0])
         return (True, r, _my_os_path_join(self._output, *kk), _u + '.txt', jc, carr[0])
 
     @classmethod
