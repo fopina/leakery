@@ -11,11 +11,15 @@ from parse import walkem, Leakery
 
 def grep(email, db_file):
     # TODO: sorted grep / bissect search
+    email = email.lower() + b':'
     r = False
-    for line in open(db_file, 'rb'):
-        if line.startswith(email):
-            print(line.decode().rstrip('\r\n'))
-            r = True
+    try:
+        for line in open(db_file, 'rb'):
+            if line.lower().startswith(email):
+                print(line.rstrip(b'\r\n'))
+                r = True
+    except FileNotFoundError:
+        return False
     return r
 
 
@@ -40,9 +44,7 @@ def main(argv=None):
     for email_b in emails:
         path, fname = Leakery.email_path(email_b)
         db_file = os.path.join(args.path, *path, fname + '.txt')
-        found = grep(email_b, db_file)
-        if not found:
-            print(email_b, 'NO MATCH')
+        grep(email_b, db_file)
 
 
 if __name__ == '__main__':
